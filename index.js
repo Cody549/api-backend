@@ -29,14 +29,43 @@ function auth(req, res, next) {
 app.post("/register", async (req, res) => {
   const { email, password } = req.body;
 
-  const hash = await bcrypt.hash(password, 10);
+  if (!email || !password) {
+    return res.json({ mensaje: "Faltan datos" });
+  }
 
+  if (password.length < 8) {
+    return res.json({ mensaje: "Mínimo 8 caracteres" });
+  }
+
+  const strongPassword = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9_]{8,}$/;
+
+  if (!strongPassword.test(password)) {
+    return res.json({
+      mensaje: "Debe tener letras y números (mínimo 8 caracteres)",
+    });
+  }
+
+  // verificar si usuario ya existe
   db.query(
-    "INSERT INTO usuarios (email, password) VALUES (?, ?)",
-    [email, hash],
-    (err) => {
+    "SELECT * FROM usuarios WHERE email = ?",
+    [email],
+    async (err, result) => {
       if (err) return res.json(err);
-      res.json({ mensaje: "Usuario registrado" });
+
+      if (result.length > 0) {
+        return res.json({ mensaje: "El usuario ya existe" });
+      }
+
+      const hash = await bcrypt.hash(password, 10);
+
+      db.query(
+        "INSERT INTO usuarios (email, password) VALUES (?, ?)",
+        [email, hash],
+        (err2) => {
+          if (err2) return res.json(err2);
+          res.json({ mensaje: "Usuario registrado correctamente" });
+        },
+      );
     },
   );
 });
@@ -45,24 +74,36 @@ app.post("/register", async (req, res) => {
 app.post("/login", (req, res) => {
   const { email, password } = req.body;
 
+  if (!email || !password) {
+    return res.json({ mensaje: "Faltan datos" });
+  }
+
   db.query(
     "SELECT * FROM usuarios WHERE email = ?",
     [email],
     async (err, results) => {
       if (err) return res.json(err);
-      if (results.length === 0)
+
+      if (results.length === 0) {
         return res.json({ mensaje: "Usuario no existe" });
+      }
 
       const user = results[0];
 
       const valid = await bcrypt.compare(password, user.password);
-      if (!valid) return res.json({ mensaje: "Contraseña incorrecta" });
 
-      const token = jwt.sign({ id: user.id }, "secreto123", {
+      if (!valid) {
+        return res.json({ mensaje: "Contraseña incorrecta" });
+      }
+
+      const token = jwt.sign({ id: user.id, email: user.email }, "secreto123", {
         expiresIn: "1h",
       });
 
-      res.json({ token });
+      res.json({
+        mensaje: "Login correcto",
+        token,
+      });
     },
   );
 });
@@ -126,6 +167,8 @@ app.delete("/api/items/:id", auth, (req, res) => {
 });
 
 // -------------------- SERVER --------------------
-app.listen(3000, () => {
-  console.log("Servidor en http://localhost:3000");
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
+  console.log("Servidor en puerto " + PORT);
 });
