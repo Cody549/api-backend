@@ -2,22 +2,21 @@ const express = require("express");
 const app = express();
 const db = require("./db");
 
-const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const jwt = require("jsonwebtoken");
 
 const SECRET = "secreto123";
 
 app.use(express.json());
 
-// -------------------- MIDDLEWARE AUTH --------------------
+// -------------------- AUTH MIDDLEWARE --------------------
 function auth(req, res, next) {
   const token = req.headers["authorization"];
 
   if (!token) return res.json({ mensaje: "No autorizado" });
 
   try {
-    const decoded = jwt.verify(token, SECRET);
-    req.user = decoded;
+    jwt.verify(token, "secreto123");
     next();
   } catch {
     res.json({ mensaje: "Token inválido" });
@@ -55,11 +54,11 @@ app.post("/login", (req, res) => {
         return res.json({ mensaje: "Usuario no existe" });
 
       const user = results[0];
-      const valid = await bcrypt.compare(password, user.password);
 
+      const valid = await bcrypt.compare(password, user.password);
       if (!valid) return res.json({ mensaje: "Contraseña incorrecta" });
 
-      const token = jwt.sign({ id: user.id }, SECRET, {
+      const token = jwt.sign({ id: user.id }, "secreto123", {
         expiresIn: "1h",
       });
 
@@ -70,7 +69,7 @@ app.post("/login", (req, res) => {
 
 // -------------------- CRUD (PROTEGIDO) --------------------
 
-// GET todos
+// GET TODOS
 app.get("/api/items", auth, (req, res) => {
   db.query("SELECT * FROM items", (err, results) => {
     if (err) return res.json(err);
@@ -78,7 +77,7 @@ app.get("/api/items", auth, (req, res) => {
   });
 });
 
-// GET por ID
+// GET POR ID
 app.get("/api/items/:id", auth, (req, res) => {
   db.query(
     "SELECT * FROM items WHERE id = ?",
@@ -90,7 +89,7 @@ app.get("/api/items/:id", auth, (req, res) => {
   );
 });
 
-// POST crear
+// CREATE
 app.post("/api/items", auth, (req, res) => {
   const { nombre, descripcion, estado } = req.body;
 
@@ -104,7 +103,7 @@ app.post("/api/items", auth, (req, res) => {
   );
 });
 
-// PUT actualizar
+// UPDATE
 app.put("/api/items/:id", auth, (req, res) => {
   const { nombre, descripcion, estado } = req.body;
 
@@ -113,7 +112,7 @@ app.put("/api/items/:id", auth, (req, res) => {
     [nombre, descripcion, estado, req.params.id],
     (err) => {
       if (err) return res.json(err);
-      res.json({ mensaje: "Actualizado" });
+      res.json({ mensaje: "Item actualizado" });
     },
   );
 });
@@ -122,11 +121,11 @@ app.put("/api/items/:id", auth, (req, res) => {
 app.delete("/api/items/:id", auth, (req, res) => {
   db.query("DELETE FROM items WHERE id=?", [req.params.id], (err) => {
     if (err) return res.json(err);
-    res.json({ mensaje: "Eliminado" });
+    res.json({ mensaje: "Item eliminado" });
   });
 });
 
 // -------------------- SERVER --------------------
 app.listen(3000, () => {
-  console.log("Servidor corriendo en http://localhost:3000");
+  console.log("Servidor en http://localhost:3000");
 });
