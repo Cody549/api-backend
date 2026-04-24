@@ -27,43 +27,49 @@ function auth(req, res, next) {
 
 // REGISTER
 app.post("/register", async (req, res) => {
-  const { email, password } = req.body;
+  let { email, password } = req.body;
 
   if (!email || !password) {
-    return res.json({ mensaje: "Faltan datos" });
+    return res.status(400).json({ mensaje: "Faltan datos" });
   }
 
+  // limpiar email
+  const cleanEmail = email.trim().toLowerCase();
+
   if (password.length < 8) {
-    return res.json({ mensaje: "Mínimo 8 caracteres" });
+    return res.status(400).json({ mensaje: "Mínimo 8 caracteres" });
   }
 
   const strongPassword = /^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9_]{8,}$/;
 
   if (!strongPassword.test(password)) {
-    return res.json({
+    return res.status(400).json({
       mensaje: "Debe tener letras y números (mínimo 8 caracteres)",
     });
   }
 
-  // verificar si usuario ya existe
+  // verificar si usuario existe
   db.query(
     "SELECT * FROM usuarios WHERE email = ?",
-    [email],
+    [cleanEmail],
     async (err, result) => {
-      if (err) return res.json(err);
+      if (err) return res.status(500).json(err);
 
       if (result.length > 0) {
-        return res.json({ mensaje: "El usuario ya existe" });
+        return res.status(409).json({ mensaje: "El usuario ya existe" });
       }
 
       const hash = await bcrypt.hash(password, 10);
 
       db.query(
         "INSERT INTO usuarios (email, password) VALUES (?, ?)",
-        [email, hash],
+        [cleanEmail, hash],
         (err2) => {
-          if (err2) return res.json(err2);
-          res.json({ mensaje: "Usuario registrado correctamente" });
+          if (err2) return res.status(500).json(err2);
+
+          res.status(201).json({
+            mensaje: "Usuario registrado correctamente",
+          });
         },
       );
     },
@@ -75,17 +81,19 @@ app.post("/login", (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
-    return res.json({ mensaje: "Faltan datos" });
+    return res.status(400).json({ mensaje: "Faltan datos" });
   }
+
+  const cleanEmail = email.trim().toLowerCase();
 
   db.query(
     "SELECT * FROM usuarios WHERE email = ?",
-    [email],
+    [cleanEmail],
     async (err, results) => {
-      if (err) return res.json(err);
+      if (err) return res.status(500).json(err);
 
       if (results.length === 0) {
-        return res.json({ mensaje: "Usuario no existe" });
+        return res.status(404).json({ mensaje: "Usuario no existe" });
       }
 
       const user = results[0];
@@ -93,14 +101,19 @@ app.post("/login", (req, res) => {
       const valid = await bcrypt.compare(password, user.password);
 
       if (!valid) {
-        return res.json({ mensaje: "Contraseña incorrecta" });
+        return res.status(401).json({ mensaje: "Contraseña incorrecta" });
       }
 
-      const token = jwt.sign({ id: user.id, email: user.email }, "secreto123", {
-        expiresIn: "1h",
-      });
+      const token = jwt.sign(
+        {
+          id: user.id,
+          email: user.email,
+        },
+        "secreto123",
+        { expiresIn: "2h" },
+      );
 
-      res.json({
+      res.status(200).json({
         mensaje: "Login correcto",
         token,
       });
